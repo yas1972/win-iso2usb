@@ -128,7 +128,6 @@ size_of_file() {
 split_esd(){
 	echo 'Split install.wim or install.esd to install.swm and install2.swm...'
 	
-	# ИСПРАВЛЕНО: Теперь работаем в $esd_dir на жестком диске, а не в /tmp
 	if [ -f "$source/install.esd" ]; then
 		mv "$source/install.esd" "$esd_dir/"
 		esd_to_wim "$esd_dir" "$esd_dir"
@@ -145,7 +144,6 @@ split_esd(){
 mountUSB(){
 	echo 'Mounted flash drive...'
 	local dev="$1"
-	# ИСПРАВЛЕНО: Монтируем в созданную $usb_dir
 	mount "$dev" "$usb_dir"
 }
 
@@ -173,7 +171,6 @@ copy_esd_to_usb(){
 		exit 1
 	fi
 
-	# ИСПРАВЛЕНО: Копируем rsync'ом в правильную папку $usb_dir
 	rsync -ah --info=progress2 "$tmpdir/" "$usb_dir/"
 
 	echo "Syncing data to flash drive (please wait)..."
@@ -189,20 +186,6 @@ usage(){
 check_dependencies
 prepare_paths
 
-if [ $# -lt 2 ] || [ $# -gt 3 ]; then
-	usage
-	trap - EXIT INT TERM
-	exit 1
-fi
-
-case $1 in
-	""|--help|-h) usage; trap - EXIT INT TERM; exit 1;;
-	*) ;;
-# --- СТАРТ ВЫПОЛНЕНИЯ СКРИПТА ---
-
-
-check_dependencies
-prepare_paths
 # Валидация количества аргументов
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
 	usage
@@ -245,6 +228,5 @@ fi
 
 copy_esd_to_usb
 
-# Убираем ловушку перед успешным финалом, так как cleanup вызовется сам по событию EXIT
 echo "\nDone successfully! You can safely remove the USB drive."
 exit 0
