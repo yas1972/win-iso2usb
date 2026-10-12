@@ -1,42 +1,49 @@
-########################iso2usb.sh################
+#!/bin/sh
 #  Created: Yuri A. Soshnikov
 #  The following functions are written using Google's AI: cleanup(),check_dependencies(),check_drive_safety()
 #  The author's email address:yas1972@yandex.ru
-#!/bin/sh
 
 # Глобальные переменные
 file_iso9660="$1"
 dev_usb="$2"
-tmpdir='/tmp/iso'
+
+# Временные директории перенесены на жесткий диск
+esd_dir="$HOME/.tmp/esd"
+tmpdir="$HOME/.tmp/iso"
+usb_dir="$HOME/.tmp/usb"
+source="$HOME/.tmp/iso/sources"
+
 file_esd="install.esd"
 file_wim="install.wim"
-source='/tmp/iso/sources'
 maxsizeFAT32=4294967296
+
+prepare_paths(){
+	mkdir -p "$esd_dir" "$tmpdir" "$source" "$usb_dir"
+}
 
 # --- ФУНКЦИЯ ОЧИСТКИ (TRAP) ---
 cleanup() {
-    echo "\n[CLEANUP] Cleaning up temporary mounts and files..."
+	echo "\n[CLEANUP] Cleaning up temporary mounts and files..."
 
-    # 1. Размонтируем ISO, если оно примонтировано
-    if mountpoint -q /mnt/iso9660 2>/dev/null; then
-        umount /mnt/iso9660 2>/dev/null
-    fi
-    if [ -d /mnt/iso9660 ]; then
-        rmdir /mnt/iso9660 2>/dev/null
-    fi
+	# 1. Размонтируем ISO, если оно примонтировано
+	if mountpoint -q /mnt/iso9660 2>/dev/null; then
+		umount /mnt/iso9660 2>/dev/null
+	fi
+	if [ -d /mnt/iso9660 ]; then
+		rmdir /mnt/iso9660 2>/dev/null
+	fi
 
-    # 2. Размонтируем флешку, если она примонтирована
-    if mountpoint -q /tmp/USB 2>/dev/null; then
-        umount /tmp/USB 2>/dev/null
-    fi
-    if [ -d /tmp/USB ]; then
-        rmdir /tmp/USB 2>/dev/null
-    fi
+	# 2. Размонтируем флешку, если она примонтирована
+	if mountpoint -q "$usb_dir" 2>/dev/null; then
+		umount "$usb_dir" 2>/dev/null
+	fi
 
-    # 3. Удаляем временные рабочие папки со всеми файлами
-    rm -Rf "$tmpdir" /tmp/ESD 2>/dev/null
+	# 3. Полностью удаляем временную скрытую папку со всем мусором
+	if [ -d "$HOME/.tmp" ]; then
+		rm -Rf "$HOME/.tmp" 2>/dev/null
+	fi
 
-    echo "[CLEANUP] Done. System is clean."
+	echo "[CLEANUP] Done. System is clean."
 }
 
 # Регистрируем ловушку: выполнить cleanup при выходе (EXIT), Ctrl+C (INT) или завершении процесса (TERM)
@@ -44,56 +51,50 @@ trap cleanup EXIT INT TERM
 
 # --- ПРОВЕРКА ЗАВИСИМОСТЕЙ ---
 check_dependencies() {
-    local missing=""
-    # Перечисляем все утилиты, необходимые скрипту
-    for cmd in wiminfo wimexport wimsplit sfdisk mkfs.fat stat rsync lsblk; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            missing="$missing $cmd"
-        fi
-    done
+	local missing=""
+	for cmd in wiminfo wimexport wimsplit sfdisk mkfs.fat stat rsync lsblk; do
+		if ! command -v "$cmd" >/dev/null 2>&1; then
+			missing="$missing $cmd"
+		fi
+	done
 
-    if [ -n "$missing" ]; then
-        echo "Error: Missing required tools:$missing" >&2
-        echo "Please install them before running the script." >&2
-        echo "On Debian/Ubuntu: sudo apt install wimtools fdisk dosfstools rsync" >&2
-        # На время выполнения cleanup временно отключаем trap, чтобы не зацикливаться при жестком выходе
-        trap - EXIT INT TERM
-        exit 1
-    fi
+	if [ -n "$missing" ]; then
+		echo "Error: Missing required tools:$missing" >&2
+		echo "Please install them before running the script." >&2
+		echo "On Debian/Ubuntu: sudo apt install wimtools fdisk dosfstools rsync" >&2
+		trap - EXIT INT TERM
+		exit 1
+	fi
 }
 
 # --- ЗАЩИТА СИСТЕМНОГО ДИСКА ---
 check_drive_safety() {
-    local dev="$1"
+	local dev="$1"
 
-    if ! [ -b "$dev" ]; then
-        echo "Error: Device $dev does not exist!" >&2
-        trap - EXIT INT TERM
-        exit 1
-    fi
+	if ! [ -b "$dev" ]; then
+		echo "Error: Device $dev does not exist!" >&2
+		trap - EXIT INT TERM
+		exit 1
+	fi
 
-    local mounts
-    mounts=$(lsblk -no MOUNTPOINT "$dev" 2>/dev/null)
+	local mounts
+	mounts=$(lsblk -no MOUNTPOINT "$dev" 2>/dev/null)
 
-    for mp in $mounts; do
-        case "$mp" in
-            "/"|"/boot"|"/boot/efi"|"/home"|"/usr"|"/var")
-                echo "CRITICAL ERROR: Device $dev contains active system mount point ($mp)!" >&2
-                echo "Operation aborted to prevent system destruction." >&2
-                trap - EXIT INT TERM
-                exit 1
-                ;;
-        esac
-    done
+	for mp in $mounts; do
+		case "$mp" in
+			"/"|"/boot"|"/boot/efi"|"/home"|"/usr"|"/var")
+				echo "CRITICAL ERROR: Device $dev contains active system mount point ($mp)!" >&2
+				echo "Operation aborted to prevent system destruction." >&2
+				trap - EXIT INT TERM
+				exit 1
+				;;
+		esac
+	done
 }
 
 prepareISOImage(){
 	local iso9660_image="$1"
 	echo 'Prepare ISO image...'
-	if ! [ -d "$tmpdir" ]; then
-		mkdir -p "$tmpdir"
-	fi
-
 	if ! [ -d /mnt/iso9660/ ]; then
 		mkdir -p /mnt/iso9660
 	fi
@@ -126,30 +127,26 @@ size_of_file() {
 
 split_esd(){
 	echo 'Split install.wim or install.esd to install.swm and install2.swm...'
-	if ! [ -d /tmp/ESD/ ]; then
-		mkdir -p /tmp/ESD/
-	fi
+	
+	# ИСПРАВЛЕНО: Теперь работаем в $esd_dir на жестком диске, а не в /tmp
 	if [ -f "$source/install.esd" ]; then
-		mv "$source/install.esd" /tmp/ESD/
-		esd_to_wim /tmp/ESD /tmp/ESD
+		mv "$source/install.esd" "$esd_dir/"
+		esd_to_wim "$esd_dir" "$esd_dir"
 	else
-		mv "$source/install.wim" /tmp/ESD/
+		mv "$source/install.wim" "$esd_dir/"
 	fi
-	cd /tmp/ESD || exit 1
+	
+	cd "$esd_dir" || exit 1
 	wimsplit "$file_wim" install.swm 4095
-	cp install.swm install*.swm "$tmpdir/sources/"
-	cd ..
-	rm -f /tmp/ESD/*
-	rmdir /tmp/ESD/
+	cp -f install*.swm "$tmpdir/sources/"
+	cd - >/dev/null || exit 1
 }
 
 mountUSB(){
 	echo 'Mounted flash drive...'
 	local dev="$1"
-	if ! [ -d /tmp/USB/ ]; then
-		mkdir -p /tmp/USB/
-	fi
-	mount "$dev" /tmp/USB
+	# ИСПРАВЛЕНО: Монтируем в созданную $usb_dir
+	mount "$dev" "$usb_dir"
 }
 
 prepareUSBdrive(){
@@ -161,7 +158,6 @@ prepareUSBdrive(){
 
 	echo "Preparing USB in $dev (Parent device: $parent_dev)..."
 
-	# Размонтируем все разделы этой флешки перед форматированием
 	umount "$parent_dev"* 2>/dev/null
 
 	sfdisk --force --delete "$parent_dev"
@@ -172,13 +168,13 @@ prepareUSBdrive(){
 
 copy_esd_to_usb(){
 	echo 'Copying ISO contents to ESD-USB...'
-	if ! [ -d /tmp/USB/ ]; then
-		echo "Error: Destination directory /tmp/USB/ does not exist!" >&2
+	if ! [ -d "$usb_dir" ]; then
+		echo "Error: Destination directory $usb_dir does not exist!" >&2
 		exit 1
 	fi
 
-	# Прогресс-бар вместо немого cp
-	rsync -ah --info=progress2 "$tmpdir/" /tmp/USB/
+	# ИСПРАВЛЕНО: Копируем rsync'ом в правильную папку $usb_dir
+	rsync -ah --info=progress2 "$tmpdir/" "$usb_dir/"
 
 	echo "Syncing data to flash drive (please wait)..."
 	sync
@@ -191,7 +187,22 @@ usage(){
 # --- СТАРТ ВЫПОЛНЕНИЯ СКРИПТА ---
 
 check_dependencies
+prepare_paths
 
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+	usage
+	trap - EXIT INT TERM
+	exit 1
+fi
+
+case $1 in
+	""|--help|-h) usage; trap - EXIT INT TERM; exit 1;;
+	*) ;;
+# --- СТАРТ ВЫПОЛНЕНИЯ СКРИПТА ---
+
+
+check_dependencies
+prepare_paths
 # Валидация количества аргументов
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
 	usage
