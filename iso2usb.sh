@@ -137,7 +137,7 @@ split_esd(){
 	fi
 	cd /tmp/ESD || exit 1
 	wimsplit "$file_wim" install.swm 4095
-	cp install.swm install?.swm "$tmpdir/sources/"
+	cp install.swm install*.swm "$tmpdir/sources/"
 	cd ..
 	rm -f /tmp/ESD/*
 	rmdir /tmp/ESD/
