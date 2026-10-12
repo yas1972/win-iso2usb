@@ -46,7 +46,7 @@ trap cleanup EXIT INT TERM
 check_dependencies() {
     local missing=""
     # Перечисляем все утилиты, необходимые скрипту
-    for cmd in wiminfo wimcapture wimsplit sfdisk mkfs.fat stat rsync lsblk; do
+    for cmd in wiminfo wimexport wimsplit sfdisk mkfs.fat stat rsync lsblk; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing="$missing $cmd"
         fi
@@ -111,7 +111,7 @@ esd_to_wim(){
 		wiminfo "$path_to_esd/$file_esd"
 		echo 'Enter the image number:'
 		read number_image
-		wimcapture "$path_to_esd/$file_esd" "$path_to_wim/$file_wim" --index="$number_image"
+		wimexport "$path_to_esd/$file_esd" "$number_image" "$path_to_wim/$file_wim" --compress=LZX
 	fi
 }
 
