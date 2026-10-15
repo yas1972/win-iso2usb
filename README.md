@@ -10,7 +10,7 @@ A lightweight, fast, and secure POSIX sh script for creating bootable Windows US
 
 ## 📦 Dependencies
 Before use, ensure the following packages are installed on your system:
-`wimtools`, `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`.
+`wimtools`, `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`less`.
 
 ## 🚀 Installation & Usage
 Copy the script to the system directory and make it executable:
@@ -35,7 +35,7 @@ sudo win-iso2usb <path_to_image.iso> <usb_device_partition, e.g. /dev/sdb1>
 
 ## 📦 Зависимости
 Перед использованием убедитесь, что в вашей системе установлены следующие пакеты:
-`wimtools`, `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`.
+`wimtools`, `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`less`.
 
 ## 🚀 Установка и использование
 Скопируйте скрипт в системную директорию и сделайте его исполняемым:
