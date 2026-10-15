@@ -1,58 +1,72 @@
 #!/bin/sh
 #  Created: Yuri A. Soshnikov
-#  The following functions are written using Google's AI: cleanup(),check_dependencies(),check_drive_safety()
-#  The author's email address:yas1972@yandex.ru
+#  Modified & Fixed: AI Collaborator
+#  The author's email address: yas1972@yandex.ru
+
+# Строгое завершение при критических ошибках команд разметки
+set -e
+
+# Проверка прав суперпользователя (root)
+if [ "$(id -u)" -ne 0 ]; then
+	echo "Error: This script must be run as root (using sudo)." >&2
+	exit 1
+fi
 
 # Глобальные переменные
 file_iso9660="$1"
 dev_usb="$2"
 
-# Временные директории перенесены на жесткий диск
-esd_dir="$HOME/.tmp/esd"
-tmpdir="$HOME/.tmp/iso"
-usb_dir="$HOME/.tmp/usb"
-source="$HOME/.tmp/iso/sources"
+# Определяем реального пользователя, который вызвал sudo, и его домашнюю папку
+REAL_USER=${SUDO_USER:-$USER}
+REAL_HOME=$(eval echo "~$REAL_USER")
+
+# Временная папка на жестком диске/SSD, чтобы не переполнять ОЗУ через /tmp
+base_tmp="$REAL_HOME/.tmp_win_usb_build"
+esd_dir="$base_tmp/esd"
+tmpdir="$base_tmp/iso"
+usb_dir="$base_tmp/usb"
+source="$tmpdir/sources"
 
 file_esd="install.esd"
 file_wim="install.wim"
 maxsizeFAT32=4294967296
 
 prepare_paths(){
-	mkdir -p "$esd_dir" "$tmpdir" "$source" "$usb_dir"
+	mkdir -p "$esd_dir" "$tmpdir" "$usb_dir"
 }
 
 # --- ФУНКЦИЯ ОЧИСТКИ (TRAP) ---
 cleanup() {
+	# Отключаем 'set -e' внутри cleanup, чтобы он гарантированно доработал до конца
+	set +e
 	echo "\n[CLEANUP] Cleaning up temporary mounts and files..."
 
-	# 1. Размонтируем ISO, если оно примонтировано
 	if mountpoint -q /mnt/iso9660 2>/dev/null; then
-		umount /mnt/iso9660 2>/dev/null
+		umount -f /mnt/iso9660 2>/dev/null
 	fi
 	if [ -d /mnt/iso9660 ]; then
 		rmdir /mnt/iso9660 2>/dev/null
 	fi
 
-	# 2. Размонтируем флешку, если она примонтирована
 	if mountpoint -q "$usb_dir" 2>/dev/null; then
-		umount "$usb_dir" 2>/dev/null
+		umount -f "$usb_dir" 2>/dev/null
 	fi
 
-	# 3. Полностью удаляем временную скрытую папку со всем мусором
-	if [ -d "$HOME/.tmp" ]; then
-		rm -Rf "$HOME/.tmp" 2>/dev/null
+	if [ -d "$base_tmp" ]; then
+		rm -Rf "$base_tmp" 2>/dev/null
 	fi
 
 	echo "[CLEANUP] Done. System is clean."
 }
 
-# Регистрируем ловушку: выполнить cleanup при выходе (EXIT), Ctrl+C (INT) или завершении процесса (TERM)
+# Ловушка для автоматического вызова очистки при любом исходе
 trap cleanup EXIT INT TERM
 
 # --- ПРОВЕРКА ЗАВИСИМОСТЕЙ ---
 check_dependencies() {
 	local missing=""
-	for cmd in wiminfo wimexport wimsplit sfdisk mkfs.fat stat rsync lsblk; do
+	# В список добавлен less
+	for cmd in wiminfo wimexport wimsplit sfdisk mkfs.fat stat rsync lsblk partprobe fatlabel less; do
 		if ! command -v "$cmd" >/dev/null 2>&1; then
 			missing="$missing $cmd"
 		fi
@@ -61,7 +75,7 @@ check_dependencies() {
 	if [ -n "$missing" ]; then
 		echo "Error: Missing required tools:$missing" >&2
 		echo "Please install them before running the script." >&2
-		echo "On Debian/Ubuntu: sudo apt install wimtools fdisk dosfstools rsync" >&2
+		echo "On Debian/Ubuntu: sudo apt install wimtools fdisk dosfstools rsync parted less" >&2
 		trap - EXIT INT TERM
 		exit 1
 	fi
@@ -98,9 +112,9 @@ prepareISOImage(){
 	if ! [ -d /mnt/iso9660/ ]; then
 		mkdir -p /mnt/iso9660
 	fi
-	mount -t udf,iso9660 -o loop "$iso9660_image" /mnt/iso9660/
+	mount -t udf,iso9660 -o loop,ro "$iso9660_image" /mnt/iso9660/
 	cp -Rf /mnt/iso9660/* "$tmpdir/"
-	chmod -R 644 "$tmpdir"/*
+	chmod -R 755 "$tmpdir"
 	umount /mnt/iso9660
 	rmdir /mnt/iso9660
 }
@@ -109,12 +123,19 @@ esd_to_wim(){
 	local path_to_esd="$1"
 	local path_to_wim="$2"
 	if [ -f "$path_to_esd/$file_esd" ]; then
-	# Постраничный вывод информации об обзразах
-	    echo "Page-by-page output of information about images...."
-		echo "File:$file"
-		wiminfo "$path_to_esd/$file_esd" | more
-		echo 'Enter the image number:'
-		read number_image
+		echo "======================================================"
+		echo " [INFO] View available Windows editions."
+		echo " Use the arrows to scroll, 'q' to exit."
+		echo "======================================================"
+		sleep 1
+		
+		# -E: закрыть less при достижении конца, -X: оставить текст на экране
+		wiminfo "$path_to_esd/$file_esd" | less -EX
+		
+		echo "\n======================================================"
+		echo 'Enter the number of the desired image (Index):'
+		# Чтение ввода строго из TTY, так как стандартный stdin может быть перенаправлен
+		read -r number_image < /dev/tty
 		wimexport "$path_to_esd/$file_esd" "$number_image" "$path_to_wim/$file_wim" --compress=LZX
 	fi
 }
@@ -134,18 +155,21 @@ split_esd(){
 	if [ -f "$source/install.esd" ]; then
 		mv "$source/install.esd" "$esd_dir/"
 		esd_to_wim "$esd_dir" "$esd_dir"
+		rm -f "$esd_dir/$file_esd"
 	else
 		mv "$source/install.wim" "$esd_dir/"
 	fi
 	
-	cd "$esd_dir" || exit 1
-	wimsplit "$file_wim" install.swm 4095
-	cp -f install*.swm "$tmpdir/sources/"
-	cd - >/dev/null || exit 1
+	cd "$esd_dir"
+	# Исправлено: указан точный путь к файлу wim
+	wimsplit "$esd_dir/$file_wim" install.swm 4095
+	rm -f "$esd_dir/$file_wim"
+	cp -f install*.swm "$source/"
+	cd - >/dev/null
 }
 
 mountUSB(){
-	echo 'Mounted flash drive...'
+	echo 'Mounting flash drive...'
 	local dev="$1"
 	mount "$dev" "$usb_dir"
 }
@@ -154,16 +178,34 @@ prepareUSBdrive(){
 	local dev="$1"
 	check_drive_safety "$dev"
 
+	# Выделяем имя родительского диска (например, /dev/sdb из /dev/sdb1)
 	local parent_dev
 	parent_dev=$(echo "$dev" | sed 's/[0-9]*$//')
 
-	echo "Preparing USB in $dev (Parent device: $parent_dev)..."
+	if [ "$dev" = "$parent_dev" ]; then
+		echo "Error: Please specify a partition (e.g. /dev/sdb1), not the whole drive." >&2
+		trap - EXIT INT TERM
+		exit 1
+	fi
 
-	umount "$parent_dev"* 2>/dev/null
+	echo "Preparing USB on $dev (Parent device: $parent_dev) using GPT..."
 
-	sfdisk --force --delete "$parent_dev"
-	sfdisk --force --append "$parent_dev"
-	mkfs.fat -F32 -I -v "$dev"
+	# Размонтируем все разделы этого диска перед изменением таблиц
+	umount "${parent_dev}"* 2>/dev/null || true
+
+	# 1. Создаем чистую таблицу разделов GPT без интерактивных вопросов
+	echo "label: gpt" | sfdisk --quiet "$parent_dev"
+	
+	# 2. Создаем один раздел на весь объем, тип: 'U' (Microsoft basic data) без вопросов
+	echo ',,U' | sfdisk --quiet --no-reread "$parent_dev"
+	
+	# 3. Перечитываем таблицу разделов в ядре Linux, чтобы появилось устройство $dev
+	echo "Informing kernel about partition changes..."
+	partprobe "$parent_dev"
+	sleep 1 
+
+	# Форматирование созданного раздела в FAT32 и присвоение метки
+	mkfs.fat -F32 -I "$dev"
 	fatlabel "$dev" ESD-USB
 }
 
@@ -181,7 +223,7 @@ copy_esd_to_usb(){
 }
 
 usage(){
-	echo "Usage: $(basename "$0") <file.iso> <device>"
+	echo "Usage: $(basename "$0") <file.iso> <partition_device_path (e.g. /dev/sdb1)>"
 }
 
 # --- СТАРТ ВЫПОЛНЕНИЯ СКРИПТА ---
@@ -201,22 +243,29 @@ case $1 in
 	*) ;;
 esac
 
-# Валидация формата диска
-if echo "$dev_usb" | grep -Eq '^/dev/sd[a-z][0-9]?$'; then
+# Проверка формата диска (строго должен оканчиваться на цифру раздела, например sdb1)
+if echo "$dev_usb" | grep -Eq '^/dev/sd[a-z][0-9]+$'; then
 	prepareISOImage "$file_iso9660"
 else
+	echo "Error: Invalid device format. Expected partition like /dev/sdb1" >&2
 	usage
 	trap - EXIT INT TERM
 	exit 1
 fi
 
-echo "Prepare a USB flash drive in $dev_usb? (Y/y/N/n)"
-read answer
+echo "Prepare a USB flash drive on $dev_usb? All data on $dev_usb will be LOST! (y/N)"
+read -r answer < /dev/tty
 case $answer in
 	'Y'|'y')
+		# Временно отключаем 'set -e', так как umount выше может вернуть не ноль
+		set +e
 		prepareUSBdrive "$dev_usb"
+		set -e
 		;;
 	*)
+		echo "Aborted by user."
+		trap - EXIT INT TERM
+		exit 0
 		;;
 esac
 
