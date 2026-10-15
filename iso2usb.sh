@@ -162,7 +162,7 @@ split_esd(){
 	
 	cd "$esd_dir"
 	# Исправлено: указан точный путь к файлу wim
-	wimsplit "$esd_dir/$file_wim" install.swm 4095
+	wimsplit "$esd_dir/$file_wim" install.swm 4000
 	rm -f "$esd_dir/$file_wim"
 	cp -f install*.swm "$source/"
 	cd - >/dev/null
