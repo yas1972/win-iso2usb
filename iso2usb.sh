@@ -109,7 +109,10 @@ esd_to_wim(){
 	local path_to_esd="$1"
 	local path_to_wim="$2"
 	if [ -f "$path_to_esd/$file_esd" ]; then
-		wiminfo "$path_to_esd/$file_esd"
+	# Постраничный вывод информации об обзразах
+	    echo "Page-by-page output of information about images...."
+		echo "File:$file"
+		wiminfo "$path_to_esd/$file_esd" | more
 		echo 'Enter the image number:'
 		read number_image
 		wimexport "$path_to_esd/$file_esd" "$number_image" "$path_to_wim/$file_wim" --compress=LZX
