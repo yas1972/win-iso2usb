@@ -46,5 +46,5 @@ sudo chmod +x /usr/local/sbin/win-iso2usb
 
 Запустите утилиту от имени суперпользователя:
 ```bash
-sudo win-iso2usb <путь_к_образу.iso> <устройство_флешки, например /dev/sdb1>
+sudo win-iso2usb <путь_к_образу.iso> <устройство_флешки, например /dev/sdb>
 ```
