@@ -19,7 +19,7 @@ sudo apt install fdisk dosfstools ntfs-3g rsync parted
 ## 📦 Installation
 For quick access from anywhere in your system, it is recommended to place the script in your local system binaries directory:
 ```bash
-sudo cp win-iso2usb /usr/local/sbin/win-iso2usb
+sudo cp iso2usb.sh /usr/local/sbin/win-iso2usb
 sudo chmod +x /usr/local/sbin/win-iso2usb
 sudo chown root:root /usr/local/sbin/win-iso2usb
 ```
@@ -56,7 +56,7 @@ sudo apt install fdisk dosfstools ntfs-3g rsync parted
 ## 📦 Установка
 Рекомендуется поместить скрипт в системную директорию для быстрого доступа:
 ```bash
-sudo cp win-iso2usb /usr/local/sbin/win-iso2usb
+sudo cp iso2usb.sh /usr/local/sbin/win-iso2usb
 sudo chmod +x /usr/local/sbin/win-iso2usb
 sudo chown root:root /usr/local/sbin/win-iso2usb
 ```
