@@ -17,7 +17,7 @@ dev_usb="$2"
 REAL_USER=${SUDO_USER:-$USER}
 REAL_HOME=$(eval echo "~$REAL_USER")
 
-# Temporary mount points (no massive file copying to local drive)
+# Mount points configuration (files are streamed directly without copying to HDD)
 base_tmp="$REAL_HOME/.tmp_win_usb_build"
 iso_mnt_dir="$base_tmp/iso_source"
 usb_boot_dir="$base_tmp/usb_boot"
@@ -27,12 +27,11 @@ prepare_paths(){
 	mkdir -p "$iso_mnt_dir" "$usb_boot_dir" "$usb_data_dir"
 }
 
-# --- CLEANUP FUNCTION (TRAP) ---
 cleanup() {
 	set +e
 	echo "\n[CLEANUP] Cleaning up temporary mounts and files..."
 
-	# Unmount directories in reverse order
+	# Unmount in reverse order
 	if mountpoint -q "$usb_boot_dir" 2>/dev/null; then umount -f "$usb_boot_dir" 2>/dev/null; fi
 	if mountpoint -q "$usb_data_dir" 2>/dev/null; then umount -f "$usb_data_dir" 2>/dev/null; fi
 	if mountpoint -q "$iso_mnt_dir" 2>/dev/null; then umount -f "$iso_mnt_dir" 2>/dev/null; fi
@@ -41,13 +40,12 @@ cleanup() {
 	echo "[CLEANUP] Done. System is clean."
 }
 
-# Trap signals for automatic cleanup on exit/interruption
+# Trap to ensure cleanup on exit, interruption, or termination
 trap cleanup EXIT INT TERM
 
-# --- CHECK DEPENDENCIES ---
 check_dependencies() {
 	local missing=""
-	for cmd in sfdisk mkfs.fat mkfs.ntfs stat rsync lsblk partprobe mount.ntfs-3g; do
+	for cmd in sfdisk mkfs.fat mkfs.ntfs stat rsync lsblk partprobe mount.ntfs-3g blockdev; do
 		if ! command -v "$cmd" >/dev/null 2>&1; then
 			missing="$missing $cmd"
 		fi
@@ -61,7 +59,6 @@ check_dependencies() {
 	fi
 }
 
-# --- DRIVE PROTECTION CHECK ---
 check_drive_safety() {
 	local dev="$1"
 	if ! [ -b "$dev" ]; then
@@ -70,14 +67,14 @@ check_drive_safety() {
 		exit 1
 	fi
 
-	# Prevent partition input (must be a whole drive letter)
+	# Ensure the target is a whole drive, not a partition (must not end with a digit)
 	if echo "$dev" | grep -Eq '[0-9]+$'; then
 		echo "Error: Please specify the WHOLE drive (e.g. /dev/sdh), NOT a partition." >&2
 		trap - EXIT INT TERM
 		exit 1
 	fi
 
-	# Prevent wiping critical system partitions
+	# Safeguard: Protect critical system mount points from accidental wiping
 	local mounts=$(lsblk -no MOUNTPOINT "$dev" 2>/dev/null)
 	for mp in $mounts; do
 		case "$mp" in
@@ -88,6 +85,26 @@ check_drive_safety() {
 				;;
 		esac
 	done
+
+	# SIZE CHECK: Verify if the USB stick has enough space for the ISO image
+	if [ -f "$file_iso9660" ]; then
+		local iso_size=$(stat -c %s "$file_iso9660")
+		local usb_size=$(blockdev --getsize64 "$dev")
+		
+		# 100MB safety margin for MBR partitioning overhead (104857600 bytes)
+		local required_size=$((iso_size + 104857600))
+
+		if [ "$usb_size" -lt "$required_size" ]; then
+			local iso_size_mb=$((iso_size / 1024 / 1024))
+			local usb_size_mb=$((usb_size / 1024 / 1024))
+			echo "CRITICAL ERROR: Insufficient space on USB drive $dev!" >&2
+			echo "ISO image size: $iso_size_mb MB" >&2
+			echo "USB drive capacity: $usb_size_mb MB" >&2
+			echo "Operation aborted. Please use a larger USB drive." >&2
+			trap - EXIT INT TERM
+			exit 1
+		fi
+	fi
 }
 
 mountISOImage(){
@@ -107,13 +124,11 @@ prepareUSBdrive(){
 	echo "Preparing USB on $parent_dev using Rufus-like dual partition (MBR)..."
 	umount "${parent_dev}"* 2>/dev/null || true
 
-	# Wipe old partition tables and filesystem signatures to avoid conflicts
+	# Wipe old partition signatures and headers to avoid conflicts
 	dd if=/dev/zero of="$parent_dev" bs=512 count=4096 conv=notrunc status=none
 	sync
 
-	# Layout configuration: 
-	# 1st partition: FAT32 (bootable, 64MB)
-	# 2nd partition: NTFS (takes up the remaining free space)
+	# Layout: 1st partition FAT32 (64MB, Bootable), 2nd partition NTFS (Remaining space)
 	cat <<EOF | sfdisk --quiet "$parent_dev"
 label: dos
 2048, 131072, 0c, *
@@ -142,8 +157,7 @@ copy_files_to_usb(){
 	sleep 2
 
 	echo "Mounting USB partitions..."
-	
-	# Mount NTFS via ntfs-3g for stable high-speed write operations
+	# Force ntfs-3g mount type for reliable writes of heavy files
 	if ! mount -t ntfs-3g "$p2" "$usb_data_dir"; then
 		echo "CRITICAL ERROR: Failed to mount NTFS partition $p2!" >&2
 		exit 1
@@ -175,7 +189,7 @@ usage(){
 	echo "Usage: $(basename "$0") <file.iso> <entire_usb_device (e.g. /dev/sdh)>"
 }
 
-# --- EXECUTION START ---
+# --- MAIN EXECUTION ---
 check_dependencies
 prepare_paths
 
@@ -190,7 +204,7 @@ case $1 in
 	*) ;;
 esac
 
-# Validate target format (must look like /dev/sdX)
+# Validate input format (must be a whole drive, e.g., /dev/sdh)
 if echo "$dev_usb" | grep -Eq '^/dev/sd[a-z]$'; then
 	mountISOImage "$file_iso9660"
 else
@@ -215,6 +229,7 @@ case $answer in
 		;;
 esac
 
+# Secure streaming copy execution
 copy_files_to_usb "$dev_usb"
 
 echo "\nDone successfully! Your Rufus-like hybrid USB drive is ready."
