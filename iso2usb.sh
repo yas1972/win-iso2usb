@@ -5,7 +5,7 @@
 
 set -e
 
-# Проверка прав суперпользователя (root)
+# Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
 	echo "Error: This script must be run as root (using sudo)." >&2
 	exit 1
@@ -17,7 +17,7 @@ dev_usb="$2"
 REAL_USER=${SUDO_USER:-$USER}
 REAL_HOME=$(eval echo "~$REAL_USER")
 
-# Теперь здесь только точки монтирования, файлы на диск не копируются
+# Temporary mount points (no massive file copying to local drive)
 base_tmp="$REAL_HOME/.tmp_win_usb_build"
 iso_mnt_dir="$base_tmp/iso_source"
 usb_boot_dir="$base_tmp/usb_boot"
@@ -27,11 +27,12 @@ prepare_paths(){
 	mkdir -p "$iso_mnt_dir" "$usb_boot_dir" "$usb_data_dir"
 }
 
+# --- CLEANUP FUNCTION (TRAP) ---
 cleanup() {
 	set +e
 	echo "\n[CLEANUP] Cleaning up temporary mounts and files..."
 
-	# Размонтируем всё в обратном порядке
+	# Unmount directories in reverse order
 	if mountpoint -q "$usb_boot_dir" 2>/dev/null; then umount -f "$usb_boot_dir" 2>/dev/null; fi
 	if mountpoint -q "$usb_data_dir" 2>/dev/null; then umount -f "$usb_data_dir" 2>/dev/null; fi
 	if mountpoint -q "$iso_mnt_dir" 2>/dev/null; then umount -f "$iso_mnt_dir" 2>/dev/null; fi
@@ -40,8 +41,10 @@ cleanup() {
 	echo "[CLEANUP] Done. System is clean."
 }
 
+# Trap signals for automatic cleanup on exit/interruption
 trap cleanup EXIT INT TERM
 
+# --- CHECK DEPENDENCIES ---
 check_dependencies() {
 	local missing=""
 	for cmd in sfdisk mkfs.fat mkfs.ntfs stat rsync lsblk partprobe mount.ntfs-3g; do
@@ -58,6 +61,7 @@ check_dependencies() {
 	fi
 }
 
+# --- DRIVE PROTECTION CHECK ---
 check_drive_safety() {
 	local dev="$1"
 	if ! [ -b "$dev" ]; then
@@ -66,12 +70,14 @@ check_drive_safety() {
 		exit 1
 	fi
 
+	# Prevent partition input (must be a whole drive letter)
 	if echo "$dev" | grep -Eq '[0-9]+$'; then
 		echo "Error: Please specify the WHOLE drive (e.g. /dev/sdh), NOT a partition." >&2
 		trap - EXIT INT TERM
 		exit 1
 	fi
 
+	# Prevent wiping critical system partitions
 	local mounts=$(lsblk -no MOUNTPOINT "$dev" 2>/dev/null)
 	for mp in $mounts; do
 		case "$mp" in
@@ -101,11 +107,13 @@ prepareUSBdrive(){
 	echo "Preparing USB on $parent_dev using Rufus-like dual partition (MBR)..."
 	umount "${parent_dev}"* 2>/dev/null || true
 
-	# Стираем старую разметку
+	# Wipe old partition tables and filesystem signatures to avoid conflicts
 	dd if=/dev/zero of="$parent_dev" bs=512 count=4096 conv=notrunc status=none
 	sync
 
-	# Разметка: 1-й раздел FAT32 (64MB), 2-й раздел NTFS (всё остальное)
+	# Layout configuration: 
+	# 1st partition: FAT32 (bootable, 64MB)
+	# 2nd partition: NTFS (takes up the remaining free space)
 	cat <<EOF | sfdisk --quiet "$parent_dev"
 label: dos
 2048, 131072, 0c, *
@@ -134,6 +142,8 @@ copy_files_to_usb(){
 	sleep 2
 
 	echo "Mounting USB partitions..."
+	
+	# Mount NTFS via ntfs-3g for stable high-speed write operations
 	if ! mount -t ntfs-3g "$p2" "$usb_data_dir"; then
 		echo "CRITICAL ERROR: Failed to mount NTFS partition $p2!" >&2
 		exit 1
@@ -165,7 +175,7 @@ usage(){
 	echo "Usage: $(basename "$0") <file.iso> <entire_usb_device (e.g. /dev/sdh)>"
 }
 
-# --- СТАРТ ВЫПОЛНЕНИЯ ---
+# --- EXECUTION START ---
 check_dependencies
 prepare_paths
 
@@ -180,8 +190,8 @@ case $1 in
 	*) ;;
 esac
 
+# Validate target format (must look like /dev/sdX)
 if echo "$dev_usb" | grep -Eq '^/dev/sd[a-z]$'; then
-	# Шаг распаковки заменен на прямое монтирование
 	mountISOImage "$file_iso9660"
 else
 	echo "Error: Invalid device format. Expected ENTIRE drive path like /dev/sdh (NOT /dev/sdh1)" >&2
@@ -205,7 +215,6 @@ case $answer in
 		;;
 esac
 
-# Запуск копирования с правильной передачей диска
 copy_files_to_usb "$dev_usb"
 
 echo "\nDone successfully! Your Rufus-like hybrid USB drive is ready."
