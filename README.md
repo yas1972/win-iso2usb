@@ -1,50 +1,75 @@
 # win-iso2usb
 
-A lightweight, fast, and secure POSIX sh script for creating bootable Windows USB flash drives from Linux. Developed as a reliable alternative to WoeUSB-ng.
+A lightweight Bash script to create bootable Windows 10/11 USB drives directly from Linux. It is optimized for modern UEFI systems and AMD Ryzen / Intel processors with specific PCIe architectures.
 
-## 🛡️ Features
-* **Data Protection:** The script checks active mount points and will strictly refuse to format a drive if it contains root (`/`), `/home`, or other critical system directories.
-* **Progress Indicator:** Instead of "silent" waiting with the `cp` command, it uses `rsync` to display real-time speed, percentage, and remaining time.
-* **Auto-Cleanup (trap):** If you cancel the operation via Ctrl+C, the script will automatically unmount temporary folders and delete gigabytes of cache .
+## 🚀 Features
+* **Direct Streaming (Fast & Safe):** No more wasting time copying gigabytes of data to temporary directories like `/tmp`. Files are read directly from the mounted ISO image and streamed straight to the USB drive, saving your SSD's lifespan.
+* **Rufus Method under Linux:** Automatically creates a dual-partition layout on the USB flash drive (a small FAT32 partition for the UEFI bootloader and a large NTFS partition for the actual OS data).
+* **No WIM Splitting:** The heavy `install.wim` file is copied monolithically. This guarantees the original Microsoft installer runs exactly as intended and fixes the classic "No drives found" or "Missing media driver" errors during Windows setup.
 
+## 🛠 Dependencies
+The script relies on standard system utilities for partitioning and formatting. Most Linux distributions have them pre-installed:
+`sfdisk`, `mkfs.fat`, `mkfs.ntfs`, `ntfs-3g`, `rsync`, `parted`.
 
-## 📦 Dependencies
-Before use, ensure the following packages are installed on your system:
- `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`ntfs-3g`.
-
-## 🚀 Installation & Usage
-Copy the script to the system directory and make it executable:
+On **Debian / Ubuntu**, you can install all missing tools with a single command:
 ```bash
-sudo cp iso2usb.sh /usr/local/sbin/win-iso2usb
+sudo apt install fdisk dosfstools ntfs-3g rsync parted
+```
+
+## 📦 Installation
+For quick access from anywhere in your system, it is recommended to place the script in your local system binaries directory:
+```bash
+sudo cp win-iso2usb /usr/local/sbin/win-iso2usb
 sudo chmod +x /usr/local/sbin/win-iso2usb
+sudo chown root:root /usr/local/sbin/win-iso2usb
 ```
 
-Run the utility as root:
+## 💻 Usage
+Run the script by passing the path to your official Windows ISO image and the **target drive device as a whole** (e.g., `/dev/sdh`, NOT an individual partition like `/dev/sdh1`):
+
 ```bash
-sudo win-iso2usb <path_to_image.iso> <usb_device_partition, e.g. /dev/sdb>
+sudo win-iso2usb /path/to/Windows.iso /dev/sdh
 ```
+
+---
+*Created by: Yuri A. Soshnikov (yas1972@yandex.ru)*  
+*Modified & Fixed with AI Collaborator*
+
 # win-iso2usb
 
-Легковесный, быстрый и безопасный POSIX sh скрипт для создания загрузочных USB-флешек с Windows из-под операционных систем Linux. Разработан как надежная альтернатива WoeUSB-ng.
+Легковесный Bash-скрипт для создания загрузочных флешек Windows 10/11 из-под Linux. Идеально подходит для современных систем UEFI и процессоров AMD Ryzen/Intel со специфической архитектурой PCIe.
 
-## 🛡️ Особенности
-* **Защита данных:** Скрипт проверяет активные точки монтирования и наотрез откажется форматировать диск, если на нем находится корень (`/`), `/home` или другие системные директории.
-* **Индикатор прогресса:** Вместо "молчаливого" ожидания с командой `cp` используется `rsync`, отображающий реальную скорость, проценты и оставшееся время.
-* **Авто-очистка (trap):** В случае отмены операции по Ctrl+C скрипт автоматически размонтирует временные папки и удалит гигабайты кэша .
-* **Поддержка FAT32 (UEFI):** Автоматически разбивает тяжелые WIM/ESD файлы (более 4 ГБ) на части с помощью `wimsplit`.
+## 🚀 Особенности
+* **Прямой стриминг (Fast & Safe):** Больше никаких временных файлов в `/tmp`. Данные копируются «на лету» напрямую из ISO на USB, что экономит ресурс вашего SSD.
+* **Метод Rufus под Linux:** Автоматически создает два раздела на флешке (маленький FAT32 для загрузчика UEFI и огромный NTFS под данные).
+* **Никакого дробления WIM:** Файл `install.wim` копируется монолитно, что гарантирует штатную работу оригинального установщика Microsoft и решает проблему «диски не найдены» при установке.
 
-## 📦 Зависимости
-Перед использованием убедитесь, что в вашей системе установлены следующие пакеты:
- `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`ntfs-3g`.
+## 🛠 Зависимости
+Для работы скрипта требуются стандартные утилиты разметки и форматирования. В большинстве дистрибутивов они уже установлены:
+`sfdisk`, `mkfs.fat`, `mkfs.ntfs`, `ntfs-3g`, `rsync`, `parted`.
 
-## 🚀 Установка и использование
-Скопируйте скрипт в системную директорию и сделайте его исполняемым:
+На **Debian / Ubuntu** их можно установить одной командой:
 ```bash
-sudo cp iso2usb.sh /usr/local/sbin/win-iso2usb
+sudo apt install fdisk dosfstools ntfs-3g rsync parted
+```
+
+## 📦 Установка
+Рекомендуется поместить скрипт в системную директорию для быстрого доступа:
+```bash
+sudo cp win-iso2usb /usr/local/sbin/win-iso2usb
 sudo chmod +x /usr/local/sbin/win-iso2usb
+sudo chown root:root /usr/local/sbin/win-iso2usb
 ```
 
-Запустите утилиту от имени суперпользователя:
+## 💻 Использование
+Запустите скрипт, передав ему путь к официальному ISO-образу и **целевой диск целиком** (например, `/dev/sdh`, а не отдельный раздел):
+
 ```bash
-sudo win-iso2usb <путь_к_образу.iso> <устройство_флешки, например /dev/sdb>
+sudo win-iso2usb /путь/к/Windows.iso /dev/sdh
 ```
+
+---
+*Created by: Yuri A. Soshnikov (yas1972@yandex.ru)*  
+*Modified & Fixed with AI Collaborator*
+
+
