@@ -1,75 +1,65 @@
 # win-iso2usb
 
-A lightweight Bash script to create bootable Windows 10/11 USB drives directly from Linux. It is optimized for modern UEFI systems and AMD Ryzen / Intel processors with specific PCIe architectures.
+A lightweight, high-performance Bash script for Linux to create bootable Windows 10/11 USB installer drives from official ISO images. It implements a **Rufus-like dual-partition mechanism** to achieve maximum UEFI compatibility while bypassing strict FAT32 file size limits.
 
-## 🚀 Features
-* **Direct Streaming (Fast & Safe):** No more wasting time copying gigabytes of data to temporary directories like `/tmp`. Files are read directly from the mounted ISO image and streamed straight to the USB drive, saving your SSD's lifespan.
-* **Rufus Method under Linux:** Automatically creates a dual-partition layout on the USB flash drive (a small FAT32 partition for the UEFI bootloader and a large NTFS partition for the actual OS data).
-* **No WIM Splitting:** The heavy `install.wim` file is copied monolithically. This guarantees the original Microsoft installer runs exactly as intended and fixes the classic "No drives found" or "Missing media driver" errors during Windows setup.
+## 🚀 Key Features
 
-## 🛠 Dependencies
-The script relies on standard system utilities for partitioning and formatting. Most Linux distributions have them pre-installed:
-`sfdisk`, `mkfs.fat`, `mkfs.ntfs`, `ntfs-3g`, `rsync`, `parted`.
+* **Rufus-like Layout:** Automatically splits the USB stick into a small bootable FAT32 partition (64MB) for UEFI initialization and a large NTFS partition for the actual installation assets.
+* **No `install.wim` Splitting:** Preserves the integrity of monolithic official Microsoft Windows images. Heavy `.wim` or `.esd` files are stored intact on the NTFS partition.
+* **On-the-Fly Streaming:** Mounts the ISO directly and streams data straight to the USB. No heavy temporary duplication on your local SSD/HDD.
+* **Smart Size Validation:** Proactively checks the low-level capacity of the connected USB drive against the ISO size before altering any bytes.
+* **Safety First:** Prevents execution on wrong inputs (demands a whole drive path like `/dev/sdh`, not a partition) and automatically blocks any attempts to write to critical active system mount points (`/`, `/home`, etc.).
 
-On **Debian / Ubuntu**, you can install all missing tools with a single command:
+## 🛠️ Prerequisites
+
+The script requires standard Linux partitioning and file system tools. If any are missing, it will gently inform you. 
+
+On **Debian / Ubuntu / Linux Mint**, run the following command to make sure you are ready:
 ```bash
 sudo apt install fdisk dosfstools ntfs-3g rsync parted
 ```
 
 ## 📦 Installation
-For quick access from anywhere in your system, it is recommended to place the script in your local system binaries directory:
+
+To make the script globally accessible as a system-wide command, deploy it to `/usr/local/sbin/`:
+
+1. Copy the script to the destination directory:
+   ```bash
+   sudo nano /usr/local/sbin/win-iso2usb
+   ```
+2. Make it executable:
+   ```bash
+   sudo chmod +x /usr/local/sbin/win-iso2usb
+   ```
+3. Set proper secure ownership:
+   ```bash
+   sudo chown root:root /usr/local/sbin/win-iso2usb
+   ```
+
+## 📖 Usage
+
+Run the tool by providing the path to your official Windows ISO file and the **entire letter node** of your USB drive (do not specify partition numbers):
+
 ```bash
-sudo cp iso2usb.sh /usr/local/sbin/win-iso2usb
-sudo chmod +x /usr/local/sbin/win-iso2usb
-sudo chown root:root /usr/local/sbin/win-iso2usb
+sudo win-iso2usb <path_to_windows.iso> <entire_usb_device>
 ```
 
-## 💻 Usage
-Run the script by passing the path to your official Windows ISO image and the **target drive device as a whole** (e.g., `/dev/sdh`, NOT an individual partition like `/dev/sdh1`):
-
+### Example:
 ```bash
-sudo win-iso2usb /path/to/Windows.iso /dev/sdh
+sudo win-iso2usb Windows11_English_x64v1.iso /dev/sdh
 ```
+
+## ⚠️ Important Hardware Troubleshooting
+If you are installing Windows on modern platforms (e.g., AMD Ryzen processors with integrated graphics or newer Intel architectures) and the Windows installer says **"A required media driver is missing"** or shows a blank drive selection window:
+1. Ensure your M.2 NVMe SSD is plugged into the **primary M.2 slot** directly connected to the CPU.
+2. Enter your motherboard BIOS and change **SATA Mode** from *RAID* to **AHCI**.
+3. Disable **CSM (Compatibility Support Module)** in your BIOS settings to enforce pure UEFI boot initialization.
+
+## 📄 License
+This project is open-source and free to use.
 
 ---
-*Created by: Yuri A. Soshnikov (yas1972@yandex.ru)*  
-*Modified & Fixed with AI Collaborator*
-
-# win-iso2usb
-
-Легковесный Bash-скрипт для создания загрузочных флешек Windows 10/11 из-под Linux. Идеально подходит для современных систем UEFI и процессоров AMD Ryzen/Intel со специфической архитектурой PCIe.
-
-## 🚀 Особенности
-* **Прямой стриминг (Fast & Safe):** Больше никаких временных файлов в `/tmp`. Данные копируются «на лету» напрямую из ISO на USB, что экономит ресурс вашего SSD.
-* **Метод Rufus под Linux:** Автоматически создает два раздела на флешке (маленький FAT32 для загрузчика UEFI и огромный NTFS под данные).
-* **Никакого дробления WIM:** Файл `install.wim` копируется монолитно, что гарантирует штатную работу оригинального установщика Microsoft и решает проблему «диски не найдены» при установке.
-
-## 🛠 Зависимости
-Для работы скрипта требуются стандартные утилиты разметки и форматирования. В большинстве дистрибутивов они уже установлены:
-`sfdisk`, `mkfs.fat`, `mkfs.ntfs`, `ntfs-3g`, `rsync`, `parted`.
-
-На **Debian / Ubuntu** их можно установить одной командой:
-```bash
-sudo apt install fdisk dosfstools ntfs-3g rsync parted
-```
-
-## 📦 Установка
-Рекомендуется поместить скрипт в системную директорию для быстрого доступа:
-```bash
-sudo cp iso2usb.sh /usr/local/sbin/win-iso2usb
-sudo chmod +x /usr/local/sbin/win-iso2usb
-sudo chown root:root /usr/local/sbin/win-iso2usb
-```
-
-## 💻 Использование
-Запустите скрипт, передав ему путь к официальному ISO-образу и **целевой диск целиком** (например, `/dev/sdh`, а не отдельный раздел):
-
-```bash
-sudo win-iso2usb /путь/к/Windows.iso /dev/sdh
-```
-
----
-*Created by: Yuri A. Soshnikov (yas1972@yandex.ru)*  
-*Modified & Fixed with AI Collaborator*
+**Created by:** Yuri A. Soshnikov ([yas1972@yandex.ru](mailto:yas1972@yandex.ru))  
+**Refined with:** AI Collaborator
 
 
