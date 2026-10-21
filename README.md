@@ -5,12 +5,12 @@ A lightweight, fast, and secure POSIX sh script for creating bootable Windows US
 ## 🛡️ Features
 * **Data Protection:** The script checks active mount points and will strictly refuse to format a drive if it contains root (`/`), `/home`, or other critical system directories.
 * **Progress Indicator:** Instead of "silent" waiting with the `cp` command, it uses `rsync` to display real-time speed, percentage, and remaining time.
-* **Auto-Cleanup (trap):** If you cancel the operation via Ctrl+C, the script will automatically unmount temporary folders and delete gigabytes of cache from `/tmp`.
-* **FAT32 (UEFI) Support:** Automatically splits heavy WIM/ESD files (over 4 GB) into smaller parts using `wimsplit`.
+* **Auto-Cleanup (trap):** If you cancel the operation via Ctrl+C, the script will automatically unmount temporary folders and delete gigabytes of cache .
+
 
 ## 📦 Dependencies
 Before use, ensure the following packages are installed on your system:
-`wimtools`, `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`less`.
+ `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`ntfs-3g`.
 
 ## 🚀 Installation & Usage
 Copy the script to the system directory and make it executable:
@@ -21,7 +21,7 @@ sudo chmod +x /usr/local/sbin/win-iso2usb
 
 Run the utility as root:
 ```bash
-sudo win-iso2usb <path_to_image.iso> <usb_device_partition, e.g. /dev/sdb1>
+sudo win-iso2usb <path_to_image.iso> <usb_device_partition, e.g. /dev/sdb>
 ```
 # win-iso2usb
 
@@ -30,12 +30,12 @@ sudo win-iso2usb <path_to_image.iso> <usb_device_partition, e.g. /dev/sdb1>
 ## 🛡️ Особенности
 * **Защита данных:** Скрипт проверяет активные точки монтирования и наотрез откажется форматировать диск, если на нем находится корень (`/`), `/home` или другие системные директории.
 * **Индикатор прогресса:** Вместо "молчаливого" ожидания с командой `cp` используется `rsync`, отображающий реальную скорость, проценты и оставшееся время.
-* **Авто-очистка (trap):** В случае отмены операции по Ctrl+C скрипт автоматически размонтирует временные папки и удалит гигабайты кэша из `/tmp`.
+* **Авто-очистка (trap):** В случае отмены операции по Ctrl+C скрипт автоматически размонтирует временные папки и удалит гигабайты кэша .
 * **Поддержка FAT32 (UEFI):** Автоматически разбивает тяжелые WIM/ESD файлы (более 4 ГБ) на части с помощью `wimsplit`.
 
 ## 📦 Зависимости
 Перед использованием убедитесь, что в вашей системе установлены следующие пакеты:
-`wimtools`, `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`less`.
+ `fdisk` (`sfdisk`), `dosfstools` (`mkfs.fat`), `rsync`, `lsblk`,`parted`,`ntfs-3g`.
 
 ## 🚀 Установка и использование
 Скопируйте скрипт в системную директорию и сделайте его исполняемым:
